@@ -1,62 +1,48 @@
 {
   lib,
-  appimageTools,
-  fetchurl,
-  makeWrapper,
+  stdenv,
+  fetchFromGitHub,
+  fetchYarnDeps,
+  yarnConfigHook,
+  yarnBuildHook,
+  yarnInstallHook,
+  nodejs,
+  libudev-zero,
+  squashfsTools,
+  python3,
 }:
-let
+
+stdenv.mkDerivation (finalAttrs: {
   pname = "bazecor";
   version = "1.6.5";
-  src = appimageTools.extract {
-    inherit pname version;
-    src = fetchurl {
-      url = "https://github.com/Dygmalab/Bazecor/releases/download/v${version}/Bazecor-${version}-x64.AppImage";
-      hash = "sha256-TitZzTNfEnuU0clTsGKexrtbIcsqE1W9A1pJCefVA6U=";
-    };
 
-    # Workaround for https://github.com/Dygmalab/Bazecor/issues/370
-    postExtract = ''
-      substituteInPlace \
-        $out/usr/lib/bazecor/resources/app/.webpack/main/index.js \
-        --replace-fail \
-          'checkUdev=()=>{try{if(l.default.existsSync(h))return l.default.readFileSync(h,"utf-8").trim()===f.trim()}catch(e){d.default.error(e)}return!1}' \
-          'checkUdev=()=>{return 1}'
-    '';
+  src = fetchFromGitHub {
+    owner = "Dygmalab";
+    repo = "bazecor";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-hPRD515VETYNLY/evgXACXQkgoxzc/ckOzAMbQ110d8=";
   };
-in
-appimageTools.wrapAppImage {
-  inherit pname version src;
 
-  # also make sure to update the udev rules in ./60-dygma.rules; most recently
-  # taken from
-  # https://github.com/Dygmalab/Bazecor/blob/v1.4.4/src/main/utils/udev.ts#L6
-
-  nativeBuildInputs = [ makeWrapper ];
-
-  extraPkgs = pkgs: [ pkgs.glib ];
-
-  # Also expose the udev rules here, so it can be used as:
-  #   services.udev.packages = [ pkgs.bazecor ];
-  # to allow non-root modifications to the keyboards.
-
-  extraInstallCommands = ''
-    wrapProgram $out/bin/bazecor \
-      --add-flags "\''${NIXOS_OZONE_WL:+\''${WAYLAND_DISPLAY:+--ozone-platform-hint=auto --enable-features=WaylandWindowDecorations --enable-wayland-ime=true}}"
-
-    install -m 444 -D ${src}/Bazecor.desktop -t $out/share/applications
-    install -m 444 -D ${src}/bazecor.png -t $out/share/pixmaps
-
-    mkdir -p $out/lib/udev/rules.d
-    install -m 444 -D ${./60-dygma.rules} $out/lib/udev/rules.d/60-dygma.rules
-
-    substituteInPlace $out/share/applications/Bazecor.desktop \
-      --replace-fail 'Exec=Bazecor' 'Exec=bazecor'
-  '';
+  yarnOfflineCache = fetchYarnDeps {
+    yarnLock = finalAttrs.src + "/yarn.lock";
+    hash = "sha256-oCi/EOGcjvXyw6jPBzLxqgGNTnGVivOVgQiNHiQA61k=";
+  };
+  yarnBuildScript = "make-lin";
+  nativeBuildInputs = [
+    yarnConfigHook
+    yarnBuildHook
+    yarnInstallHook
+    # Needed for executing package.json scripts
+    nodejs
+    libudev-zero
+    squashfsTools
+    python3
+  ];
 
   meta = {
     description = "Graphical configurator for Dygma Products";
     homepage = "https://github.com/Dygmalab/Bazecor";
-    changelog = "https://github.com/Dygmalab/Bazecor/releases/tag/v${version}";
+    changelog = "https://github.com/Dygmalab/Bazecor/releases/tag/v${finalAttrs.version}";
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
     license = lib.licenses.gpl3Only;
     maintainers = with lib.maintainers; [
@@ -66,4 +52,4 @@ appimageTools.wrapAppImage {
     platforms = [ "x86_64-linux" ];
     mainProgram = "bazecor";
   };
-}
+})
