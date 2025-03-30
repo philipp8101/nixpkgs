@@ -1153,6 +1153,8 @@ self: super: with self; {
 
   avion = callPackage ../development/python-modules/avion { };
 
+  avocado = callPackage ../development/python-modules/avocado { };
+
   avro = callPackage ../development/python-modules/avro { };
 
   avro-python3 = callPackage ../development/python-modules/avro-python3 { };
